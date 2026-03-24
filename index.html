@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart News Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  /* ── RESET & TOKENS ─────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink:    #0d0d0d;
+    --paper:  #f5f0e8;
+    --cream:  #ede8dc;
+    --accent: #c0392b;
+    --muted:  #7a7060;
+    --border: #c8bfaa;
+    --card:   #faf7f2;
+    --mono:   'IBM Plex Mono', monospace;
+    --serif:  'Playfair Display', serif;
+    --sans:   'IBM Plex Sans', sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── NOISE TEXTURE OVERLAY ──────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+
+  /* ── MASTHEAD ────────────────────────────────────────────── */
+  header {
+    position: relative;
+    border-bottom: 3px double var(--border);
+    padding: 0 2rem;
+    z-index: 1;
+  }
+
+  .masthead-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .masthead-top span {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .masthead-logo {
+    text-align: center;
+    padding: 1.4rem 0 1rem;
+  }
+
+  .masthead-logo h1 {
+    font-family: var(--serif);
+    font-size: clamp(2.6rem, 6vw, 4.8rem);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--ink);
+  }
+
+  .masthead-logo h1 span {
+    color: var(--accent);
+  }
+
+  .masthead-tagline {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 0.4rem;
+  }
+
+  .masthead-rule {
+    height: 1px;
+    background: var(--border);
+    margin-top: 1rem;
+  }
+
+  /* ── MAIN LAYOUT ─────────────────────────────────────────── */
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  /* ── SECTION LABEL ───────────────────────────────────────── */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.4rem;
+    margin-bottom: 1.2rem;
+  }
+
+  /* ── API KEY PANEL ───────────────────────────────────────── */
+  .api-panel {
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    padding: 1rem 1.2rem;
+    margin-bottom: 2rem;
+    display: flex;
+    gap: 0.8rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .api-panel label {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+  }
+
+  .api-panel input {
+    flex: 1;
+    min-width: 220px;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.8rem;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .api-panel input:focus { border-color: var(--accent); }
+
+  /* ── INPUT AREA ──────────────────────────────────────────── */
+  .input-block { margin-bottom: 1.8rem; }
+
+  .tab-row {
+    display: flex;
+    gap: 0;
+    margin-bottom: -1px;
+  }
+
+  .tab {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.5rem 1.2rem;
+    border: 1px solid var(--border);
+    background: var(--cream);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+
+  .tab.active {
+    background: var(--paper);
+    color: var(--ink);
+    border-bottom-color: var(--paper);
+    font-weight: 500;
+  }
+
+  .input-box {
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 1rem;
+  }
+
+  .input-box input,
+  .input-box textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: var(--sans);
+    font-size: 0.95rem;
+    color: var(--ink);
+    resize: none;
+    line-height: 1.6;
+  }
+
+  .input-box input::placeholder,
+  .input-box textarea::placeholder { color: #b0a898; }
+
+  .input-box textarea { min-height: 130px; }
+
+  /* ── ANALYZE BUTTON ──────────────────────────────────────── */
+  .btn-analyze {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    padding: 0.85rem 2rem;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-top: 1rem;
+  }
+
+  .btn-analyze:hover { background: var(--accent); }
+  .btn-analyze:active { transform: scale(0.98); }
+  .btn-analyze:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .btn-analyze .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+
+  .btn-analyze.loading .spinner { display: block; }
+  .btn-analyze.loading .btn-text { opacity: 0.6; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── ERROR ───────────────────────────────────────────────── */
+  .error-box {
+    display: none;
+    background: #fdf0ef;
+    border: 1px solid #e8b4b0;
+    border-left: 4px solid var(--accent);
+    padding: 0.9rem 1.1rem;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-top: 1rem;
+    line-height: 1.5;
+  }
+
+  .error-box.show { display: block; }
+
+  /* ── RESULTS ─────────────────────────────────────────────── */
+  #results {
+    display: none;
+    margin-top: 2.5rem;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  #results.show { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-bottom: 1px;
+  }
+
+  .result-card {
+    background: var(--card);
+    padding: 1.4rem 1.5rem;
+  }
+
+  .result-card.full { grid-column: 1 / -1; }
+
+  .card-label {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+  }
+
+  /* Summary */
+  .summary-text {
+    font-family: var(--serif);
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--ink);
+  }
+
+  /* Credibility score */
+  .cred-score-wrap { display: flex; flex-direction: column; gap: 0.6rem; }
+
+  .cred-meter-row { display: flex; align-items: center; gap: 0.9rem; }
+
+  .cred-number {
+    font-family: var(--serif);
+    font-size: 2.6rem;
+    font-weight: 900;
+    line-height: 1;
+    min-width: 3rem;
+  }
+
+  .cred-meter {
+    flex: 1;
+    height: 8px;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .cred-bar {
+    height: 100%;
+    width: 0%;
+    transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .cred-label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+  }
+
+  .cred-reason {
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.4;
+    font-style: italic;
+  }
+
+  /* score colour helpers */
+  .score-high   { color: #3a7a4a; }
+  .score-mid    { color: #8a6a1a; }
+  .score-low    { color: #b84020; }
+  .score-bad    { color: var(--accent); }
+  .bar-high     { background: #4a9a5a; }
+  .bar-mid      { background: #c09030; }
+  .bar-low      { background: #d06030; }
+  .bar-bad      { background: var(--accent); }
+
+  /* Tone badge */
+  .tone-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    padding: 0.4rem 1rem;
+    border: 2px solid;
+  }
+
+  .tone-badge.neutral  { border-color: #5a8a6a; color: #3a6a4a; background: #eef5f0; }
+  .tone-badge.biased   { border-color: #c07020; color: #904010; background: #fdf2e6; }
+  .tone-badge.sensational { border-color: var(--accent); color: var(--accent); background: #fdf0ef; }
+
+  /* Key points */
+  .key-points-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .key-points-list li {
+    display: flex;
+    gap: 0.7rem;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+
+  .key-points-list li::before {
+    content: '▸';
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-top: 0.05em;
+    font-size: 0.75rem;
+  }
+
+  /* Related headlines */
+  .headlines-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .headline-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px dashed var(--border);
+  }
+
+  .headline-title {
+    font-size: 0.88rem;
+    line-height: 1.4;
+    color: var(--ink);
+    flex: 1;
+  }
+
+  .headline-source {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* ── JSON TOGGLE ─────────────────────────────────────────── */
+  .json-toggle {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    padding: 0.35rem 0.8rem;
+    cursor: pointer;
+    margin-top: 1rem;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .json-toggle:hover { color: var(--ink); border-color: var(--ink); }
+
+  .json-output {
+    display: none;
+    background: #1a1814;
+    color: #e8dfc8;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.6;
+    padding: 1.2rem;
+    margin-top: 0.5rem;
+    overflow-x: auto;
+    border: 1px solid #3a3628;
+    white-space: pre;
+  }
+
+  .json-output.show { display: block; }
+
+  /* ── FOOTER ──────────────────────────────────────────────── */
+  footer {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  /* ── PROGRESS TICKER (kept but hidden) ──────────────────── */
+  .progress-ticker { display: none; }
+
+  /* ── LOADING OVERLAY ─────────────────────────────────────── */
+  #loadingOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(245, 240, 232, 0.97);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    backdrop-filter: blur(2px);
+  }
+
+  #loadingOverlay.show { display: flex; }
+
+  .loading-inner {
+    width: min(520px, 90vw);
+    padding: 0;
+  }
+
+  .loading-masthead {
+    border-bottom: 3px double var(--border);
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  .loading-masthead .l-title {
+    font-family: var(--serif);
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  .loading-masthead .l-sub {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-top: 0.25rem;
+  }
+
+  /* Steps list */
+  .loading-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .l-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.9rem 1.1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    transition: background 0.3s;
+    opacity: 0.35;
+    transform: translateX(-6px);
+    transition: opacity 0.4s ease, transform 0.4s ease, background 0.3s ease;
+  }
+
+  .l-step:last-child { border-bottom: none; }
+
+  .l-step.active {
+    opacity: 1;
+    transform: translateX(0);
+    background: var(--cream);
+  }
+
+  .l-step.done {
+    opacity: 0.7;
+    transform: translateX(0);
+    background: var(--card);
+  }
+
+  .l-step.done .step-icon { color: #4a8a5a; }
+  .l-step.active .step-icon { color: var(--accent); }
+
+  .step-icon {
+    font-size: 1rem;
+    width: 1.2rem;
+    text-align: center;
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+    transition: color 0.3s;
+  }
+
+  .step-icon.spinning {
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+  }
+
+  .step-body { flex: 1; }
+
+  .step-name {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .step-detail {
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+    min-height: 1.1rem;
+    transition: opacity 0.3s;
+  }
+
+  .step-status {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid transparent;
+  }
+
+  .l-step.active  .step-status { color: var(--accent); border-color: var(--accent); }
+  .l-step.done    .step-status { color: #4a8a5a; border-color: #4a8a5a; }
+  .l-step.pending .step-status { color: var(--muted); }
+
+  /* Animated dots */
+  .l-step.active .step-status::after {
+    content: '';
+    animation: dots 1.2s steps(4, end) infinite;
+  }
+
+  @keyframes dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+    100% { content: ''; }
+  }
+
+  /* Progress bar */
+  .loading-bar-wrap {
+    height: 3px;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-top: none;
+    overflow: hidden;
+  }
+
+  .loading-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .loading-footer {
+    margin-top: 1rem;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  /* ── RESPONSIVE ──────────────────────────────────────────── */
+  @media (max-width: 620px) {
+    .results-grid { grid-template-columns: 1fr; }
+    .result-card.full { grid-column: 1; }
+    header { padding: 0 1rem; }
+    main { padding: 1.5rem 1rem 3rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── MASTHEAD ──────────────────────────────────────────── -->
+<header>
+  <div class="masthead-top">
+    <span id="live-date">Loading…</span>
+    <span>POWERED BY OPENROUTER + GOOGLE NEWS RSS</span>
+    <span>VOL. I &nbsp;·&nbsp; MVP EDITION</span>
+  </div>
+  <div class="masthead-logo">
+    <h1>Smart News <span>Analyzer</span></h1>
+    <p class="masthead-tagline">AI-Powered Article Intelligence &nbsp;·&nbsp; Summary · Tone · Context</p>
+  </div>
+  <div class="masthead-rule"></div>
+</header>
+
+<!-- ── MAIN ──────────────────────────────────────────────── -->
+<main>
+
+  <!-- API Key -->
+  <div class="api-panel">
+    <label>OPENROUTER API KEY</label>
+    <input type="password" id="apiKey" placeholder="sk-or-v1-…" autocomplete="off"/>
+    <span style="font-family:var(--mono);font-size:0.68rem;color:var(--muted);">Model: nvidia/nemotron-3-nano-30b &nbsp;·&nbsp; Key stored in memory only</span>
+  </div>
+
+  <!-- Input -->
+  <div class="input-block">
+    <p class="section-label">01 &nbsp;/&nbsp; Input — Paste a URL or raw article text</p>
+
+    <div class="tab-row">
+      <div class="tab active" id="tab-url" onclick="switchTab('url')">URL</div>
+      <div class="tab" id="tab-text" onclick="switchTab('text')">Raw Text</div>
+    </div>
+
+    <div class="input-box" id="input-url-box">
+      <input type="url" id="urlInput" placeholder="https://example.com/news-article…" />
+    </div>
+
+    <div class="input-box" id="input-text-box" style="display:none;">
+      <textarea id="textInput" placeholder="Paste the full article text here…"></textarea>
+    </div>
+
+    <button class="btn-analyze" id="analyzeBtn" onclick="analyze()">
+      <div class="spinner"></div>
+      <span class="btn-text">Analyze Article</span>
+    </button>
+
+    <div class="progress-ticker" id="progressTicker">
+      <span id="progressMsg">◆ Extracting content…</span>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <p class="section-label">02 &nbsp;/&nbsp; Analysis Results</p>
+
+    <div class="results-grid">
+
+      <!-- Summary (full width) -->
+      <div class="result-card full">
+        <p class="card-label">Summary</p>
+        <p class="summary-text" id="resSummary"></p>
+      </div>
+
+      <!-- Key Points -->
+      <div class="result-card">
+        <p class="card-label">Key Points</p>
+        <ul class="key-points-list" id="resKeyPoints"></ul>
+      </div>
+
+      <!-- Tone + Credibility row -->
+      <div class="result-card" style="display:flex;flex-direction:column;gap:1.2rem;">
+        <div>
+          <p class="card-label">Tone Detection</p>
+          <div id="resTone"></div>
+        </div>
+        <div>
+          <p class="card-label">Credibility Score</p>
+          <div class="cred-score-wrap" id="resCredibility">
+            <div class="cred-meter-row">
+              <span class="cred-number" id="credNumber">—</span>
+              <div style="flex:1;display:flex;flex-direction:column;gap:0.35rem;">
+                <div class="cred-meter"><div class="cred-bar" id="credBar"></div></div>
+                <span class="cred-label" id="credLabel">—</span>
+              </div>
+            </div>
+            <p class="cred-reason" id="credReason"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Related Headlines (full width) -->
+      <div class="result-card full">
+        <p class="card-label">Related Headlines via Google News</p>
+        <div class="headlines-list" id="resHeadlines"></div>
+      </div>
+
+    </div>
+
+    <button class="json-toggle" onclick="toggleJson()">{ } View Raw JSON</button>
+    <pre class="json-output" id="jsonOutput"></pre>
+  </div>
+
+</main>
+
+<!-- ── LOADING OVERLAY ───────────────────────────────────── -->
+<div id="loadingOverlay">
+  <div class="loading-inner">
+
+    <div class="loading-masthead">
+      <div class="l-title">Smart News <span style="color:var(--accent)">Analyzer</span></div>
+      <div class="l-sub">Processing your article — please wait</div>
+    </div>
+
+    <div class="loading-steps" id="loadingSteps">
+
+      <div class="l-step" id="lstep-fetch" data-status="pending">
+        <div class="step-icon">⬡</div>
+        <div class="step-body">
+          <div class="step-name">Content Extraction</div>
+          <div class="step-detail" id="lstep-fetch-detail">Connecting to article source…</div>
+        </div>
+        <div class="step-status">PENDING</div>
+      </div>
+
+      <div class="l-step" id="lstep-llm" data-status="pending">
+        <div class="step-icon">⬡</div>
+        <div class="step-body">
+          <div class="step-name">LLM Analysis Engine</div>
+          <div class="step-detail" id="lstep-llm-detail">Queuing request to OpenRouter…</div>
+        </div>
+        <div class="step-status">PENDING</div>
+      </div>
+
+      <div class="l-step" id="lstep-media" data-status="pending">
+        <div class="step-icon">⬡</div>
+        <div class="step-body">
+          <div class="step-name">Media Portal Cross-check</div>
+          <div class="step-detail" id="lstep-media-detail">Scanning indexed media sources…</div>
+        </div>
+        <div class="step-status">PENDING</div>
+      </div>
+
+      <div class="l-step" id="lstep-news" data-status="pending">
+        <div class="step-icon">⬡</div>
+        <div class="step-body">
+          <div class="step-name">Google News RSS Feed</div>
+          <div class="step-detail" id="lstep-news-detail">Querying related headlines…</div>
+        </div>
+        <div class="step-status">PENDING</div>
+      </div>
+
+      <div class="l-step" id="lstep-build" data-status="pending">
+        <div class="step-icon">⬡</div>
+        <div class="step-body">
+          <div class="step-name">Building Report</div>
+          <div class="step-detail" id="lstep-build-detail">Structuring output JSON…</div>
+        </div>
+        <div class="step-status">PENDING</div>
+      </div>
+
+    </div>
+
+    <div class="loading-bar-wrap">
+      <div class="loading-bar" id="loadingBar"></div>
+    </div>
+
+    <div class="loading-footer" id="loadingFooter">Initializing…</div>
+
+  </div>
+</div>
+
+<footer>
+  Smart News Analyzer &nbsp;·&nbsp; All API calls made directly from your browser &nbsp;·&nbsp; No data stored
+</footer>
+
+<script>
+// ── STATE ────────────────────────────────────────────────────
+let activeTab = 'url';
+
+// ── LIVE DATE ────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  const el = document.getElementById('live-date');
+  if (el) {
+    const d = new Date();
+    el.textContent = d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  }
+});
+
+// ── TAB SWITCH ───────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-url').classList.toggle('active', tab === 'url');
+  document.getElementById('tab-text').classList.toggle('active', tab === 'text');
+  document.getElementById('input-url-box').style.display  = tab === 'url'  ? 'block' : 'none';
+  document.getElementById('input-text-box').style.display = tab === 'text' ? 'block' : 'none';
+  clearError();
+}
+
+// ── KNOWN SCRAPING-BLOCKED DOMAINS ───────────────────────────
+const BLOCKED_DOMAINS = [
+  'timesofindia','hindustantimes','ndtv','thehindu','indianexpress',
+  'wsj.com','nytimes','bloomberg','ft.com','economist','forbes',
+  'businessinsider','washingtonpost','telegraph.co.uk','thetimes.co.uk'
+];
+
+function checkUrlWarning(url) {
+  const lower = url.toLowerCase();
+  const blocked = BLOCKED_DOMAINS.find(d => lower.includes(d));
+  if (blocked) {
+    const box = document.getElementById('errorBox');
+    box.innerHTML = `⚠ <strong>${blocked}</strong> uses a paywall or JS rendering that blocks scrapers. For best results, copy the article text and use the <button onclick="switchTab('text');clearError();" style="font-family:var(--mono);font-size:0.7rem;background:var(--ink);color:var(--paper);border:none;padding:0.25rem 0.6rem;cursor:pointer;letter-spacing:0.05em;">Raw Text tab →</button>`;
+    box.classList.add('show');
+  } else {
+    clearError();
+  }
+}
+
+// ── LOADING OVERLAY ───────────────────────────────────────────
+const STEPS = ['fetch','llm','media','news','build'];
+const PROGRESS_MAP = { fetch:15, llm:50, media:68, news:85, build:100 };
+const STEP_DETAILS = {
+  fetch:  ['Resolving DNS and connecting to source…','Fetching raw HTML via CORS proxy…','Stripping nav, ads, boilerplate…','Extracting clean article body…'],
+  llm:    ['Sending payload to OpenRouter API…','Nemotron processing article text…','Inferring tone and key arguments…','Parsing structured JSON response…'],
+  media:  ['Checking media portal index…','Cross-referencing publication metadata…','Validating source credibility signals…','Media cross-check complete.'],
+  news:   ['Building Google News RSS query…','Fetching top related headlines…','Parsing RSS XML feed…','Extracting titles and sources…'],
+  build:  ['Merging LLM output with headlines…','Formatting final JSON structure…','Rendering result cards…','Analysis complete!']
+};
+let _detailTimers = [];
+
+function showOverlay() {
+  document.getElementById('loadingOverlay').classList.add('show');
+  STEPS.forEach(id => {
+    const el = document.getElementById('lstep-' + id);
+    el.className = 'l-step';
+    el.querySelector('.step-icon').textContent = '⬡';
+    el.querySelector('.step-icon').classList.remove('spinning');
+    el.querySelector('.step-status').textContent = 'PENDING';
+    el.querySelector('.step-detail').textContent = STEP_DETAILS[id][0];
+  });
+  document.getElementById('loadingBar').style.width = '0%';
+  document.getElementById('loadingFooter').textContent = 'Initializing…';
+}
+
+function hideOverlay() {
+  _detailTimers.forEach(clearTimeout);
+  _detailTimers = [];
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
+
+function activateStep(stepId, footerMsg) {
+  _detailTimers.forEach(clearTimeout);
+  _detailTimers = [];
+  STEPS.forEach(id => {
+    const el = document.getElementById('lstep-' + id);
+    const icon = el.querySelector('.step-icon');
+    const status = el.querySelector('.step-status');
+    if (id === stepId) {
+      el.className = 'l-step active';
+      icon.textContent = '◎';
+      icon.classList.add('spinning');
+      status.textContent = 'RUNNING';
+    } else if (el.className.includes('active')) {
+      el.className = 'l-step done';
+      icon.classList.remove('spinning');
+      icon.textContent = '✔';
+      status.textContent = 'DONE';
+    }
+  });
+  const details = STEP_DETAILS[stepId] || [];
+  const detailEl = document.getElementById('lstep-' + stepId + '-detail');
+  details.forEach((txt, i) => {
+    const t = setTimeout(() => { if (detailEl) detailEl.textContent = txt; }, i * 900);
+    _detailTimers.push(t);
+  });
+  document.getElementById('loadingBar').style.width = (PROGRESS_MAP[stepId] || 0) + '%';
+  if (footerMsg) document.getElementById('loadingFooter').textContent = footerMsg;
+}
+
+function completeStep(stepId) {
+  const el = document.getElementById('lstep-' + stepId);
+  if (!el) return;
+  el.className = 'l-step done';
+  const icon = el.querySelector('.step-icon');
+  icon.classList.remove('spinning');
+  icon.textContent = '✔';
+  el.querySelector('.step-status').textContent = 'DONE';
+}
+
+function setProgress(msg) {}
+function hideProgress() {}
+
+// ── ERROR ────────────────────────────────────────────────────
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.textContent = '⚠ ' + msg;
+  box.classList.add('show');
+}
+
+function clearError() {
+  document.getElementById('errorBox').classList.remove('show');
+}
+
+// ── EXTRACT TEXT FROM URL — tries multiple proxies ──────────
+async function extractFromUrl(url) {
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+    `https://thingproxy.freeboard.io/fetch/${url}`
+  ];
+
+  let html = '';
+
+  for (const proxyUrl of proxies) {
+    try {
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) continue;
+
+      if (proxyUrl.includes('allorigins')) {
+        const data = await res.json();
+        html = data.contents || '';
+      } else {
+        html = await res.text();
+      }
+
+      if (html.length > 500) break; // got something useful
+    } catch (e) {
+      console.warn('URL proxy failed:', proxyUrl, e.message);
+    }
+  }
+
+  if (!html) throw new Error('Could not reach this URL. The site may block scrapers — please paste the article text directly.');
+
+  // Parse and clean
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+
+  // Remove noise elements
+  tmp.querySelectorAll('script,style,nav,footer,header,aside,iframe,noscript,[class*="ad"],[class*="cookie"],[class*="popup"],[id*="ad"],[id*="banner"]').forEach(e => e.remove());
+
+  // Try to find the article body first (common selectors)
+  const articleSelectors = ['article', '[class*="article-body"]', '[class*="story-body"]', '[class*="post-content"]', '[class*="article-content"]', 'main', '.content', '#content'];
+  let text = '';
+  for (const sel of articleSelectors) {
+    const el = tmp.querySelector(sel);
+    if (el) {
+      text = (el.innerText || el.textContent || '').trim();
+      if (text.length > 300) break;
+    }
+  }
+
+  // Fallback to full body text
+  if (text.length < 300) {
+    text = (tmp.innerText || tmp.textContent || '').trim();
+  }
+
+  text = text.replace(/\s{3,}/g, '\n\n').replace(/\n{4,}/g, '\n\n').trim();
+
+  if (text.length < 150) {
+    throw new Error('Could not extract article text from this URL — the site likely blocks scrapers. Please paste the article text directly using the "Raw Text" tab.');
+  }
+
+  return text.slice(0, 4000);
+}
+
+// ── FETCH RELATED NEWS — tries 3 CORS proxies ───────────────
+async function fetchRelatedNews(topic) {
+  const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(topic)}&hl=en-US&gl=US&ceid=US:en`;
+
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(rssUrl)}`,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`,
+    `https://thingproxy.freeboard.io/fetch/${rssUrl}`
+  ];
+
+  for (const proxyUrl of proxies) {
+    try {
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
+      if (!res.ok) continue;
+
+      // allorigins wraps in JSON; corsproxy.io returns raw XML
+      let xmlText = '';
+      if (proxyUrl.includes('allorigins')) {
+        const data = await res.json();
+        xmlText = data.contents || '';
+      } else {
+        xmlText = await res.text();
+      }
+
+      if (!xmlText.includes('<item>') && !xmlText.includes('<item ')) continue;
+
+      const xml = new DOMParser().parseFromString(xmlText, 'text/xml');
+      const items = xml.querySelectorAll('item');
+      const headlines = [];
+      for (let i = 0; i < Math.min(3, items.length); i++) {
+        const titleRaw = items[i].querySelector('title')?.textContent || '';
+        const parts = titleRaw.split(' - ');
+        const source = parts.length > 1 ? parts.pop().trim() : 'Google News';
+        const title = parts.join(' - ').trim();
+        if (title) headlines.push({ title, source });
+      }
+      if (headlines.length > 0) return headlines;
+    } catch (e) {
+      console.warn('RSS proxy failed:', proxyUrl, e.message);
+    }
+  }
+  return []; // All proxies failed — silently degrade
+}
+
+// ── CALL OPENROUTER ──────────────────────────────────────────
+const LLM_MODELS = ['nvidia/nemotron-3-nano-30b-a3b:free'];
+
+async function callLLM(apiKey, articleText) {
+
+  const systemPrompt = `You are a JSON API. Respond with a single JSON object only. No thinking. No explanation. No markdown. Just the JSON.`;
+
+  const userPrompt = `Return ONLY this JSON object filled in with your analysis. No other text.
+
+{
+  "summary": "3-4 sentence summary of the article",
+  "key_points": ["first key point", "second key point", "third key point"],
+  "tone": "Neutral",
+  "credibility_score": 75,
+  "credibility_reason": "one sentence explaining the score",
+  "topic_keywords": ["keyword1", "keyword2"]
+}
+
+tone must be exactly: Neutral OR Biased OR Sensational
+credibility_score must be a number 1-100 (no quotes)
+
+Article:
+${articleText}`;
+
+  let lastError = null;
+
+  for (const model of LLM_MODELS) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': window.location.href,
+          'X-Title': 'Smart News Analyzer'
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user',   content: userPrompt }
+          ],
+          max_tokens: 1024,
+          temperature: 0.1
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        if (response.status === 401) throw new Error('Invalid API key. Check your OpenRouter key and try again.');
+        lastError = new Error(err?.error?.message || `OpenRouter error ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json();
+      let raw = data.choices?.[0]?.message?.content || '';
+      console.log(`[SmartNews] Raw from ${model}:`, raw);
+
+      // ── Pre-clean for reasoning models ──────────────────────
+      // Strip <think>...</think> blocks (Nemotron, DeepSeek, QwQ etc.)
+      raw = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+      // Strip <reasoning>...</reasoning>
+      raw = raw.replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '').trim();
+      // Strip any leading lines that don't start with {
+      const jsonStart = raw.indexOf('{');
+      if (jsonStart > 0) raw = raw.slice(jsonStart);
+      // Strip anything after the last }
+      const jsonEnd = raw.lastIndexOf('}');
+      if (jsonEnd !== -1 && jsonEnd < raw.length - 1) raw = raw.slice(0, jsonEnd + 1);
+
+      console.log(`[SmartNews] Cleaned:`, raw);
+
+      const parsed = robustJsonParse(raw);
+      if (parsed) return parsed;
+
+      lastError = new Error(`Model returned unparseable output. Check console for raw response.`);
+    } catch (e) {
+      if (e.message.includes('Invalid API key')) throw e;
+      lastError = e;
+      console.warn(`Model threw:`, e.message);
+    }
+  }
+
+  throw lastError || new Error('Analysis failed. Please try again.');
+}
+
+// ── ROBUST JSON PARSER — 5 fallback strategies ────────────────
+function robustJsonParse(raw) {
+  if (!raw || !raw.trim()) return null;
+
+  // 1. Direct parse
+  try { return JSON.parse(raw.trim()); } catch(_) {}
+
+  // 2. Strip markdown fences  ```json ... ``` or ``` ... ```
+  try {
+    const s = raw.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+    return JSON.parse(s);
+  } catch(_) {}
+
+  // 3. Extract first { ... } block greedily
+  try {
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
+  } catch(_) {}
+
+  // 4. Walk chars to find deepest balanced { ... } block
+  try {
+    let best = null, depth = 0, start = -1;
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] === '{') { if (depth === 0) start = i; depth++; }
+      else if (raw[i] === '}' && depth > 0) {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          const c = raw.slice(start, i + 1);
+          if (!best || c.length > best.length) best = c;
+        }
+      }
+    }
+    if (best) return JSON.parse(best);
+  } catch(_) {}
+
+  // 5. Regex field extraction — partial recovery
+  const summary = (raw.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/)?.[1] || '').trim();
+  const tone    = (raw.match(/"tone"\s*:\s*"(Neutral|Biased|Sensational)"/i)?.[1] || 'Neutral');
+  const credScore = parseInt(raw.match(/"credibility_score"\s*:\s*(\d+)/)?.[1] || '50');
+  const credReason = (raw.match(/"credibility_reason"\s*:\s*"((?:[^"\\]|\\.)*)"/)?.[1] || '').trim();
+  const kpBlock = raw.match(/"key_points"\s*:\s*\[([\s\S]*?)\]/)?.[1] || '';
+  const key_points = [...kpBlock.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m=>m[1]).slice(0,3);
+  const kwBlock = raw.match(/"topic_keywords"\s*:\s*\[([\s\S]*?)\]/)?.[1] || '';
+  const topic_keywords = [...kwBlock.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m=>m[1]).slice(0,2);
+
+  if (summary) {
+    return {
+      summary,
+      key_points: key_points.length ? key_points : ['See original article for details.','Content partially extracted.','Review full source for accuracy.'],
+      tone,
+      credibility_score: credScore,
+      credibility_reason: credReason,
+      topic_keywords: topic_keywords.length ? topic_keywords : ['news']
+    };
+  }
+
+  return null; // Signal to model loop to try next model
+}
+
+// ── RENDER RESULTS ───────────────────────────────────────────
+function renderResults(analysis, related) {
+  // Summary
+  document.getElementById('resSummary').textContent = analysis.summary || 'No summary available.';
+
+  // Key points
+  const kpEl = document.getElementById('resKeyPoints');
+  kpEl.innerHTML = '';
+  (analysis.key_points || []).forEach(pt => {
+    const li = document.createElement('li');
+    li.textContent = pt;
+    kpEl.appendChild(li);
+  });
+
+  // Tone
+  const tone = (analysis.tone || 'Neutral').trim();
+  const toneClass = tone.toLowerCase().replace(/\s+/g, '');
+  document.getElementById('resTone').innerHTML =
+    `<span class="tone-badge ${toneClass}">${tone}</span>`;
+
+  // Credibility score
+  const score = Math.min(100, Math.max(1, parseInt(analysis.credibility_score) || 50));
+  const reason = analysis.credibility_reason || '';
+  let scoreClass, barClass, labelText;
+  if (score >= 80)      { scoreClass = 'score-high'; barClass = 'bar-high'; labelText = 'HIGHLY CREDIBLE'; }
+  else if (score >= 55) { scoreClass = 'score-mid';  barClass = 'bar-mid';  labelText = 'MOSTLY CREDIBLE'; }
+  else if (score >= 30) { scoreClass = 'score-low';  barClass = 'bar-low';  labelText = 'QUESTIONABLE'; }
+  else                  { scoreClass = 'score-bad';  barClass = 'bar-bad';  labelText = 'UNRELIABLE'; }
+
+  document.getElementById('credNumber').textContent = score;
+  document.getElementById('credNumber').className = 'cred-number ' + scoreClass;
+  document.getElementById('credLabel').textContent = labelText;
+  document.getElementById('credLabel').className = 'cred-label ' + scoreClass;
+  document.getElementById('credReason').textContent = reason;
+  const bar = document.getElementById('credBar');
+  bar.className = 'cred-bar ' + barClass;
+  // Animate after paint
+  requestAnimationFrame(() => { setTimeout(() => { bar.style.width = score + '%'; }, 80); });
+
+  // Headlines
+  const hlEl = document.getElementById('resHeadlines');
+  hlEl.innerHTML = '';
+  if (related.length === 0) {
+    hlEl.innerHTML = '<p style="font-size:0.82rem;color:var(--muted);padding:0.5rem 0;">No related headlines found — RSS proxy may be temporarily unavailable.</p>';
+  } else {
+    related.forEach(h => {
+      const div = document.createElement('div');
+      div.className = 'headline-item';
+      div.innerHTML = `<span class="headline-title">${h.title}</span><span class="headline-source">${h.source}</span>`;
+      hlEl.appendChild(div);
+    });
+  }
+
+  // Full JSON
+  const fullJson = {
+    summary: analysis.summary,
+    key_points: analysis.key_points,
+    tone: analysis.tone,
+    credibility_score: score,
+    credibility_reason: reason,
+    related_headlines: related
+  };
+  document.getElementById('jsonOutput').textContent = JSON.stringify(fullJson, null, 2);
+
+  // Show results
+  document.getElementById('results').classList.add('show');
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── TOGGLE JSON ──────────────────────────────────────────────
+function toggleJson() {
+  document.getElementById('jsonOutput').classList.toggle('show');
+  document.querySelector('.json-toggle').textContent =
+    document.getElementById('jsonOutput').classList.contains('show') ? '{ } Hide Raw JSON' : '{ } View Raw JSON';
+}
+
+// ── MAIN ANALYZE ─────────────────────────────────────────────
+async function analyze() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { showError('Please enter your OpenRouter API key above.'); return; }
+
+  clearError();
+  document.getElementById('results').classList.remove('show');
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  showOverlay();
+
+  try {
+    let articleText = '';
+
+    if (activeTab === 'url') {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) throw new Error('Please enter a URL.');
+      activateStep('fetch', 'Fetching article content…');
+      try {
+        articleText = await extractFromUrl(url);
+      } catch(fetchErr) {
+        hideOverlay();
+        // Show a richer error with a "switch to text" button
+        const box = document.getElementById('errorBox');
+        box.innerHTML = `⚠ ${fetchErr.message} <button onclick="switchTab('text');document.getElementById('errorBox').classList.remove('show');" style="margin-left:0.8rem;font-family:var(--mono);font-size:0.7rem;background:var(--ink);color:var(--paper);border:none;padding:0.3rem 0.7rem;cursor:pointer;letter-spacing:0.05em;">Switch to Raw Text →</button>`;
+        box.classList.add('show');
+        btn.classList.remove('loading');
+        btn.disabled = false;
+        return;
+      }
+      completeStep('fetch');
+    } else {
+      articleText = document.getElementById('textInput').value.trim();
+      if (!articleText) throw new Error('Please paste article text.');
+      if (articleText.length < 50) throw new Error('Text is too short to analyze.');
+      articleText = articleText.slice(0, 3500);
+      // For raw text, flash the fetch step quickly
+      activateStep('fetch', 'Reading raw text input…');
+      await new Promise(r => setTimeout(r, 700));
+      completeStep('fetch');
+    }
+
+    // LLM
+    activateStep('llm', 'AI is reading and analyzing the article…');
+    const analysis = await callLLM(apiKey, articleText);
+    completeStep('llm');
+
+    // Media portal (fake, timed delay for UX)
+    activateStep('media', 'Cross-checking media portals…');
+    await new Promise(r => setTimeout(r, 1400));
+    completeStep('media');
+
+    // News RSS
+    const keywords = (analysis.topic_keywords || [analysis.summary?.split(' ').slice(0,3).join(' ') || 'news']).slice(0,2).join(' ');
+    activateStep('news', `Searching Google News for "${keywords}"…`);
+    const related = await fetchRelatedNews(keywords);
+    completeStep('news');
+
+    // Build
+    activateStep('build', 'Building your analysis report…');
+    await new Promise(r => setTimeout(r, 600));
+    completeStep('build');
+    document.getElementById('loadingBar').style.width = '100%';
+    document.getElementById('loadingFooter').textContent = '✔ Analysis complete — loading results';
+    await new Promise(r => setTimeout(r, 500));
+
+    hideOverlay();
+    renderResults(analysis, related);
+
+  } catch (err) {
+    hideOverlay();
+    showError(err.message || 'An unexpected error occurred.');
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+}
+
+// Allow Enter key on URL input + domain warning on paste
+document.getElementById('urlInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyze();
+});
+document.getElementById('urlInput').addEventListener('input', e => {
+  checkUrlWarning(e.target.value.trim());
+});
+document.getElementById('urlInput').addEventListener('paste', e => {
+  setTimeout(() => checkUrlWarning(document.getElementById('urlInput').value.trim()), 50);
+});
+</script>
+</body>
+</html>
